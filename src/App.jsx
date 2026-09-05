@@ -133,6 +133,16 @@ export default function App() {
   // Check if current video is Dailymotion
   const isDailymotion = wp.currentVideo && /dailymotion|dai\.ly/.test(wp.currentVideo);
 
+  // Stable callback for the player's onReady prop. Previously this was an
+  // inline `() => wp.actions.setIsReady(true)` created fresh on every
+  // render, which (combined with a dependency-array bug in
+  // DailymotionPlayer) caused the Dailymotion player to be destroyed and
+  // recreated on almost every re-render, resetting its playback position
+  // and breaking sync.
+  const handlePlayerReady = useCallback(() => {
+    wp.actions.setIsReady(true);
+  }, [wp.actions.setIsReady]);
+
   if (!inRoom) {
     return <JoinScreen initialRoomCode={initialRoomCode} onJoin={handleJoin} />;
   }
@@ -172,7 +182,7 @@ export default function App() {
                   ref={wp.playerRef}
                   url={wp.currentVideo}
                   playing={wp.playing}
-                  onReady={() => wp.actions.setIsReady(true)}
+                  onReady={handlePlayerReady}
                   onPlay={wp.actions.handlePlay}
                   onPause={wp.actions.handlePause}
                   onSeek={wp.actions.handleSeek}
@@ -196,7 +206,7 @@ export default function App() {
                 }}
                 width="100%"
                 height="100%"
-                onReady={() => wp.actions.setIsReady(true)}
+                onReady={handlePlayerReady}
                 onPlay={wp.actions.handlePlay}
                 onPause={wp.actions.handlePause}
                 onSeek={wp.actions.handleSeek}
