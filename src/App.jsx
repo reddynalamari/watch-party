@@ -207,12 +207,10 @@ export default function App() {
               }}
               width="100%"
               height="100%"
-              progressInterval={2000}
               onReady={() => wp.actions.setIsReady(true)}
               onPlay={wp.actions.handlePlay}
               onPause={wp.actions.handlePause}
               onSeek={wp.actions.handleSeek}
-              onProgress={wp.actions.handleProgress}
               onEnded={wp.actions.handleEnded}
             />
             <FloatingReactions reactions={wp.reactions} />
