@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 
 // Extract video ID from any Dailymotion URL
 const getDailymotionId = (url) => {
@@ -23,143 +23,153 @@ let instanceCounter = 0;
 
 const DailymotionPlayer = forwardRef(({ url, playing, onReady, onPlay, onPause, onSeek, onEnded }, ref) => {
   const containerRef = useRef(null);
-  const playerRef = useRef(null);
-  const scriptLoadedRef = useRef(false);
+  const playerRef = useRef(null);        // will store the player instance after creation
   const containerId = `dm-player-${++instanceCounter}`;
-  const currentPlayingRef = useRef(playing);
   const currentTimeRef = useRef(0);
+  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
 
-  // Load the Dailymotion library script
+  // Load the library script once
   useEffect(() => {
     if (document.getElementById(SCRIPT_ID)) {
-      scriptLoadedRef.current = true;
-      initPlayer();
+      setScriptLoaded(true);
       return;
     }
     const script = document.createElement('script');
     script.id = SCRIPT_ID;
     script.src = SCRIPT_SRC;
     script.async = true;
-    script.onload = () => {
-      scriptLoadedRef.current = true;
-      initPlayer();
-    };
+    script.onload = () => setScriptLoaded(true);
     script.onerror = () => console.error('Failed to load Dailymotion library');
     document.body.appendChild(script);
   }, []);
 
-  // Initialize or re-initialize player
-  const initPlayer = () => {
-    const videoId = getDailymotionId(url);
-    if (!videoId || !containerRef.current || !window.dailymotion) return;
+  // Create player when script is loaded and container exists
+  useEffect(() => {
+    if (!scriptLoaded || !containerRef.current || !window.dailymotion) return;
 
-    // Destroy existing player
+    const videoId = getDailymotionId(url);
+    if (!videoId) return;
+
+    // Destroy any previous player
     if (playerRef.current) {
       try { playerRef.current.destroy?.(); } catch {}
       playerRef.current = null;
+      setPlayerReady(false);
     }
 
-    // Create new player – pass the container ID as a string with '#'
-    try {
-      const player = window.dailymotion.createPlayer(`#${containerId}`, {
+    // Create player – returns a Promise
+    window.dailymotion
+      .createPlayer(`#${containerId}`, {
         video: videoId,
-        autoplay: currentPlayingRef.current ? 1 : 0,
-        controls: 1,
-        'api': 1,
-        mute: 0,
+        params: {
+          autoplay: playing ? 1 : 0,
+          controls: 1,
+          'api': 1,
+          mute: 0,
+        },
+      })
+      .then((player) => {
+        playerRef.current = player;
+        setPlayerReady(true);
+
+        // --- Listen to events ---
+        // Use the event constants if available; fallback to string names
+        const events = window.dailymotion.events || {};
+
+        // Ready event
+        player.on(events.VIDEO_READY || 'ready', () => {
+          onReady?.();
+          // If playing is true, ensure playback starts (some browsers block autoplay)
+          if (playing) {
+            player.play().catch(() => {});
+          }
+        });
+
+        // Play event
+        player.on(events.VIDEO_PLAY || 'play', () => {
+          onPlay?.();
+        });
+
+        // Pause event
+        player.on(events.VIDEO_PAUSE || 'pause', () => {
+          onPause?.();
+        });
+
+        // Time update – track current time
+        player.on(events.VIDEO_TIMEUPDATE || 'timeupdate', (state) => {
+          if (state?.videoTime !== undefined) {
+            currentTimeRef.current = state.videoTime;
+          }
+        });
+
+        // Seek event – triggered when user seeks
+        player.on(events.VIDEO_SEEK || 'seek', (state) => {
+          if (state?.videoTime !== undefined) {
+            currentTimeRef.current = state.videoTime;
+          }
+          onSeek?.();
+        });
+
+        // Ended event
+        player.on(events.VIDEO_END || 'ended', () => {
+          onEnded?.();
+        });
+
+        // If playing is true after creation, call play again (safety)
+        if (playing) {
+          setTimeout(() => {
+            if (playerRef.current) {
+              playerRef.current.play().catch(() => {});
+            }
+          }, 100);
+        }
+      })
+      .catch((err) => {
+        console.error('Dailymotion player creation error:', err);
       });
 
-      playerRef.current = player;
-
-      // Bind events – Dailymotion uses .on()
-      if (typeof player.on === 'function') {
-        player.on('ready', () => {
-          onReady?.();
-          // If playing, ensure we start
-          if (currentPlayingRef.current) player.play();
-        });
-        player.on('play', () => { currentPlayingRef.current = true; onPlay?.(); });
-        player.on('pause', () => { currentPlayingRef.current = false; onPause?.(); });
-        player.on('seek', (data) => {
-          if (data && data.time) currentTimeRef.current = data.time;
-          onSeek?.();
-        });
-        player.on('timeupdate', (data) => {
-          if (data && data.time) currentTimeRef.current = data.time;
-        });
-        player.on('ended', () => onEnded?.());
-      } else {
-        // Fallback for older versions – use addEventListener
-        player.addEventListener('ready', () => {
-          onReady?.();
-          if (currentPlayingRef.current) player.play();
-        });
-        player.addEventListener('play', () => { currentPlayingRef.current = true; onPlay?.(); });
-        player.addEventListener('pause', () => { currentPlayingRef.current = false; onPause?.(); });
-        player.addEventListener('seek', (data) => {
-          if (data && data.time) currentTimeRef.current = data.time;
-          onSeek?.();
-        });
-        player.addEventListener('timeupdate', (data) => {
-          if (data && data.time) currentTimeRef.current = data.time;
-        });
-        player.addEventListener('ended', () => onEnded?.());
+    // Cleanup on unmount or URL change
+    return () => {
+      if (playerRef.current) {
+        try { playerRef.current.destroy?.(); } catch {}
+        playerRef.current = null;
+        setPlayerReady(false);
       }
-    } catch (err) {
-      console.error('Dailymotion player init error:', err);
-    }
-  };
+    };
+  }, [scriptLoaded, url, playing, onReady, onPlay, onPause, onSeek, onEnded]);
 
-  // Re-init when URL changes (video ID changes)
+  // Control playback when `playing` prop changes after player is ready
   useEffect(() => {
-    if (scriptLoadedRef.current && window.dailymotion) {
-      initPlayer();
-    }
-  }, [url]);
-
-  // Control playback when `playing` prop changes
-  useEffect(() => {
-    currentPlayingRef.current = playing;
+    if (!playerReady || !playerRef.current) return;
     const player = playerRef.current;
-    if (!player) return;
-    try {
-      if (playing) player.play();
-      else player.pause();
-    } catch (err) {
-      // ignore
+    if (playing) {
+      player.play().catch(() => {});
+    } else {
+      player.pause().catch(() => {});
     }
-  }, [playing]);
+  }, [playing, playerReady]);
 
   // Expose methods to parent (same as ReactPlayer)
   useImperativeHandle(ref, () => ({
     getCurrentTime: () => currentTimeRef.current || 0,
     seekTo: (seconds) => {
-      const player = playerRef.current;
-      if (!player) return;
-      try { player.seek(seconds); } catch {}
+      if (playerReady && playerRef.current) {
+        playerRef.current.seek(seconds).catch(() => {});
+      }
     },
     play: () => {
-      const player = playerRef.current;
-      if (!player) return;
-      try { player.play(); } catch {}
+      if (playerReady && playerRef.current) {
+        playerRef.current.play().catch(() => {});
+      }
     },
     pause: () => {
-      const player = playerRef.current;
-      if (!player) return;
-      try { player.pause(); } catch {}
+      if (playerReady && playerRef.current) {
+        playerRef.current.pause().catch(() => {});
+      }
     },
     getInternalPlayer: () => playerRef.current,
-  }), []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (playerRef.current) {
-        try { playerRef.current.destroy?.(); } catch {}
-        playerRef.current = null;
-      }
-    };
-  }, []);
+  }), [playerReady]);
 
   const videoId = getDailymotionId(url);
   if (!videoId) {

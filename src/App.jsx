@@ -3,7 +3,7 @@ import ReactPlayerImport from 'react-player';
 
 const ReactPlayer = ReactPlayerImport?.default ?? ReactPlayerImport;
 // Import the new Dailymotion iframe player
-import DailymotionIframePlayer from './components/DailymotionIframePlayer';
+import DailymotionPlayer from './components/DailymotionPlayer';
 import { useWatchParty } from './hooks/useWatchParty';
 import { generateRoomCode } from './lib/utils';
 import JoinScreen from './components/JoinScreen';
@@ -168,17 +168,17 @@ export default function App() {
         <div className="flex-1 relative mb-3 min-h-[200px]">
           <div className="absolute inset-0 bg-black rounded-xl overflow-hidden shadow-2xl">
             {isDailymotion ? (
-              <DailymotionIframePlayer
-                ref={wp.playerRef}
-                url={wp.currentVideo}
-                playing={wp.playing}
-                onReady={() => wp.actions.setIsReady(true)}
-                onPlay={wp.actions.handlePlay}
-                onPause={wp.actions.handlePause}
-                onSeek={wp.actions.handleSeek}
-                onEnded={wp.actions.handleEnded}
-              />
-            ) : (
+                <DailymotionPlayer
+                  ref={wp.playerRef}
+                  url={wp.currentVideo}
+                  playing={wp.playing}
+                  onReady={() => wp.actions.setIsReady(true)}
+                  onPlay={wp.actions.handlePlay}
+                  onPause={wp.actions.handlePause}
+                  onSeek={wp.actions.handleSeek}
+                  onEnded={wp.actions.handleEnded}
+                />
+              ) : (
               <ReactPlayer
                 ref={wp.playerRef}
                 url={wp.currentVideo}
