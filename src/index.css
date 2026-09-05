@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+/* Tailwind v4 defaults to prefers-color-scheme for `dark:`. This line makes
+   `dark:` respond to a `.dark` class on <html> instead, so the in-app
+   theme toggle can control it regardless of the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html, body, #root {
+  height: 100%;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0) scale(0.8); opacity: 0; }
+  15% { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { transform: translateY(-160px) scale(1.2); opacity: 0; }
+}
+
+.animate-float-up {
+  animation: float-up 2.5s ease-out forwards;
+}
