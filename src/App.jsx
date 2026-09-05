@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import ReactPlayerImport from 'react-player';
 
 const ReactPlayer = ReactPlayerImport?.default ?? ReactPlayerImport;
+// Import the new Dailymotion iframe player
+import DailymotionIframePlayer from './components/DailymotionIframePlayer';
 import { useWatchParty } from './hooks/useWatchParty';
 import { generateRoomCode } from './lib/utils';
 import JoinScreen from './components/JoinScreen';
@@ -21,7 +23,7 @@ export default function App() {
     localStorage.setItem('wp_theme', theme);
   }, [theme]);
 
-  // ---- Join state (no host flag) ----
+  // ---- Join state ----
   const [inRoom, setInRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -32,7 +34,6 @@ export default function App() {
     setRoomName(finalRoom);
     setDisplayName(name);
     setInRoom(true);
-
     const url = new URL(window.location.href);
     url.searchParams.set('room', finalRoom);
     window.history.replaceState({}, '', url);
@@ -67,7 +68,7 @@ export default function App() {
     }
   }, []);
 
-  // Track unread chat messages
+  // Chat unread
   const prevMsgCount = useRef(0);
   useEffect(() => {
     if (!chatOpen && wp.chatMessages.length > prevMsgCount.current) {
@@ -80,38 +81,28 @@ export default function App() {
     if (chatOpen) setChatUnread(0);
   }, [chatOpen]);
 
-  // Keyboard shortcuts: Space to play/pause (anyone), F for fullscreen
+  // Keyboard shortcuts
   useEffect(() => {
     const onKeyDown = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
       if (e.code === 'Space') {
         e.preventDefault();
         wp.playing ? wp.actions.handlePause() : wp.actions.handlePlay();
       }
-      if (e.key.toLowerCase() === 'f') {
-        toggleFullscreen();
-      }
+      if (e.key.toLowerCase() === 'f') toggleFullscreen();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [wp.playing, wp.actions.handlePlay, wp.actions.handlePause, toggleFullscreen]);
 
-  // ---- Invite (unchanged) ----
   const handleInvite = useCallback(async () => {
     const url = window.location.href;
     if (navigator.share && window.matchMedia('(max-width: 768px)').matches) {
-      try {
-        await navigator.share({ title: 'Join my Watch Party', url });
-        return true;
-      } catch { /* fall through */ }
+      try { await navigator.share({ title: 'Join my Watch Party', url }); return true; } catch { /* fall through */ }
     }
     if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(url);
-        return true;
-      } catch { /* fall through */ }
+      try { await navigator.clipboard.writeText(url); return true; } catch { /* fall through */ }
     }
     try {
       const textarea = document.createElement('textarea');
@@ -124,9 +115,7 @@ export default function App() {
       const ok = document.execCommand('copy');
       textarea.remove();
       return ok;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }, []);
 
   const handlePlayNow = useCallback(() => {
@@ -140,6 +129,9 @@ export default function App() {
     wp.actions.addToQueue(urlInput.trim());
     setUrlInput('');
   }, [urlInput, wp.actions.addToQueue]);
+
+  // Check if current video is Dailymotion
+  const isDailymotion = wp.currentVideo && /dailymotion|dai\.ly/.test(wp.currentVideo);
 
   if (!inRoom) {
     return <JoinScreen initialRoomCode={initialRoomCode} onJoin={handleJoin} />;
@@ -175,29 +167,42 @@ export default function App() {
 
         <div className="flex-1 relative mb-3 min-h-[200px]">
           <div className="absolute inset-0 bg-black rounded-xl overflow-hidden shadow-2xl">
-            <ReactPlayer
-              ref={wp.playerRef}
-              url={wp.currentVideo}
-              playing={wp.playing}
-              controls
-              config={{
-                youtube: {
-                  playerVars: {
-                    fs: 0,
-                    origin: window.location.origin,
-                    enablejsapi: 1,
-                    rel: 0,
+            {isDailymotion ? (
+              <DailymotionIframePlayer
+                ref={wp.playerRef}
+                url={wp.currentVideo}
+                playing={wp.playing}
+                onReady={() => wp.actions.setIsReady(true)}
+                onPlay={wp.actions.handlePlay}
+                onPause={wp.actions.handlePause}
+                onSeek={wp.actions.handleSeek}
+                onEnded={wp.actions.handleEnded}
+              />
+            ) : (
+              <ReactPlayer
+                ref={wp.playerRef}
+                url={wp.currentVideo}
+                playing={wp.playing}
+                controls
+                config={{
+                  youtube: {
+                    playerVars: {
+                      fs: 0,
+                      origin: window.location.origin,
+                      enablejsapi: 1,
+                      rel: 0,
+                    },
                   },
-                },
-              }}
-              width="100%"
-              height="100%"
-              onReady={() => wp.actions.setIsReady(true)}
-              onPlay={wp.actions.handlePlay}
-              onPause={wp.actions.handlePause}
-              onSeek={wp.actions.handleSeek}
-              onEnded={wp.actions.handleEnded}
-            />
+                }}
+                width="100%"
+                height="100%"
+                onReady={() => wp.actions.setIsReady(true)}
+                onPlay={wp.actions.handlePlay}
+                onPause={wp.actions.handlePause}
+                onSeek={wp.actions.handleSeek}
+                onEnded={wp.actions.handleEnded}
+              />
+            )}
             <FloatingReactions reactions={wp.reactions} />
             <ReactionBar onSend={wp.actions.sendReaction} />
           </div>
