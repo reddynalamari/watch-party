@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import ReactPlayer from 'react-player';
+import ReactPlayerImport from 'react-player';
+
+const ReactPlayer = ReactPlayerImport?.default ?? ReactPlayerImport;
 import { useWatchParty } from './hooks/useWatchParty';
 import { generateRoomCode } from './lib/utils';
 import JoinScreen from './components/JoinScreen';
