@@ -6,11 +6,11 @@ export default function JoinScreen({ initialRoomCode, onJoin }) {
   const [roomCode, setRoomCode] = useState(initialRoomCode || '');
   const [name, setName] = useState(() => localStorage.getItem('wp_name') || '');
 
-  const submit = (wantsToHost) => (e) => {
+  const submit = (e) => {
     e.preventDefault();
     const finalName = name.trim() || 'Guest';
     localStorage.setItem('wp_name', finalName);
-    onJoin(roomCode.trim().toUpperCase(), finalName, wantsToHost);
+    onJoin(roomCode.trim().toUpperCase(), finalName);
   };
 
   return (
@@ -37,17 +37,15 @@ export default function JoinScreen({ initialRoomCode, onJoin }) {
           value={roomCode}
           onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
         />
-        <div className="flex flex-col gap-3">
-          <button onClick={submit(true)} className="bg-blue-600 px-4 py-3 rounded-lg font-bold text-white hover:bg-blue-500 transition">
-            Start as Host
-          </button>
-          <button onClick={submit(false)} className="bg-gray-700 px-4 py-3 rounded-lg font-bold text-white hover:bg-gray-600 transition">
-            Join as Viewer
-          </button>
-        </div>
+        <button
+          onClick={submit}
+          className="w-full bg-blue-600 px-4 py-3 rounded-lg font-bold text-white hover:bg-blue-500 transition"
+        >
+          Join Room
+        </button>
         {initialRoomCode && (
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-4">
-            You followed an invite link for room <span className="font-bold">{initialRoomCode}</span> — join as a viewer unless you're starting it.
+            You followed an invite link for room <span className="font-bold">{initialRoomCode}</span>.
           </p>
         )}
       </form>

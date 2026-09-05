@@ -14,25 +14,23 @@ import CamLight from './components/CamLight';
 import { FloatingReactions, ReactionBar } from './components/Reactions';
 
 export default function App() {
-  // ---- Theme (persisted; affects the whole UI) ----
+  // ---- Theme ----
   const [theme, setTheme] = useState(() => localStorage.getItem('wp_theme') || 'dark');
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('wp_theme', theme);
   }, [theme]);
 
-  // ---- Join state ----
+  // ---- Join state (no host flag) ----
   const [inRoom, setInRoom] = useState(false);
   const [roomName, setRoomName] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [wantsToHost, setWantsToHost] = useState(false);
   const initialRoomCode = useRef(new URLSearchParams(window.location.search).get('room') || '').current;
 
-  const handleJoin = useCallback((code, name, hostFlag) => {
+  const handleJoin = useCallback((code, name) => {
     const finalRoom = code || generateRoomCode();
     setRoomName(finalRoom);
     setDisplayName(name);
-    setWantsToHost(hostFlag);
     setInRoom(true);
 
     const url = new URL(window.location.href);
@@ -40,7 +38,7 @@ export default function App() {
     window.history.replaceState({}, '', url);
   }, []);
 
-  const wp = useWatchParty(inRoom ? roomName : null, displayName, wantsToHost);
+  const wp = useWatchParty(inRoom ? roomName : null, displayName);
 
   // ---- UI state ----
   const [urlInput, setUrlInput] = useState('');
@@ -69,7 +67,7 @@ export default function App() {
     }
   }, []);
 
-  // Track unread chat messages while the panel is closed
+  // Track unread chat messages
   const prevMsgCount = useRef(0);
   useEffect(() => {
     if (!chatOpen && wp.chatMessages.length > prevMsgCount.current) {
@@ -82,13 +80,13 @@ export default function App() {
     if (chatOpen) setChatUnread(0);
   }, [chatOpen]);
 
-  // Keyboard shortcuts: Space to play/pause (host only), F for fullscreen
+  // Keyboard shortcuts: Space to play/pause (anyone), F for fullscreen
   useEffect(() => {
     const onKeyDown = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-      if (e.code === 'Space' && wp.isHost) {
+      if (e.code === 'Space') {
         e.preventDefault();
         wp.playing ? wp.actions.handlePause() : wp.actions.handlePlay();
       }
@@ -98,33 +96,23 @@ export default function App() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [wp.isHost, wp.playing, wp.actions.handlePlay, wp.actions.handlePause, toggleFullscreen]);
+  }, [wp.playing, wp.actions.handlePlay, wp.actions.handlePause, toggleFullscreen]);
 
-  // Three-tier fallback so "Invite" always does *something* useful instead of
-  // silently failing: native share sheet on mobile, then the Clipboard API,
-  // then a legacy execCommand copy for browsers/contexts that block it.
-  // Returns true/false so the button can show real "Copied!" / failure state.
+  // ---- Invite (unchanged) ----
   const handleInvite = useCallback(async () => {
     const url = window.location.href;
-
     if (navigator.share && window.matchMedia('(max-width: 768px)').matches) {
       try {
         await navigator.share({ title: 'Join my Watch Party', url });
         return true;
-      } catch {
-        // User cancelled the share sheet, or it's unsupported — fall through.
-      }
+      } catch { /* fall through */ }
     }
-
     if (navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(url);
         return true;
-      } catch {
-        // Clipboard permission denied (common on non-HTTPS/localhost) — fall through.
-      }
+      } catch { /* fall through */ }
     }
-
     try {
       const textarea = document.createElement('textarea');
       textarea.value = url;
@@ -145,13 +133,13 @@ export default function App() {
     if (!urlInput.trim()) return;
     wp.actions.playNow(urlInput.trim());
     setUrlInput('');
-  }, [urlInput, wp.actions]);
+  }, [urlInput, wp.actions.playNow]);
 
   const handleAddToQueue = useCallback(() => {
     if (!urlInput.trim()) return;
     wp.actions.addToQueue(urlInput.trim());
     setUrlInput('');
-  }, [urlInput, wp.actions]);
+  }, [urlInput, wp.actions.addToQueue]);
 
   if (!inRoom) {
     return <JoinScreen initialRoomCode={initialRoomCode} onJoin={handleJoin} />;
@@ -162,11 +150,9 @@ export default function App() {
       ref={containerRef}
       className="flex flex-col md:flex-row h-screen w-full bg-gray-50 dark:bg-black text-gray-900 dark:text-white overflow-hidden font-sans relative"
     >
-      {/* MAIN COLUMN: controls, player, queue */}
       <div className="flex-1 flex flex-col p-3 sm:p-4 overflow-hidden min-w-0">
         <TopBar
           roomName={roomName}
-          isHost={wp.isHost}
           connectionStatus={wp.connectionStatus}
           participantCount={wp.participants.length}
           onToggleParticipants={() => setParticipantsOpen((o) => !o)}
@@ -184,7 +170,6 @@ export default function App() {
           onPlayNow={handlePlayNow}
           onAddToQueue={handleAddToQueue}
           currentVideo={wp.currentVideo}
-          isViewer={!wp.isHost}
           onResync={wp.actions.resyncNow}
         />
 
@@ -220,7 +205,6 @@ export default function App() {
 
         <Playlist
           playlist={wp.playlist}
-          isHost={wp.isHost}
           currentVideo={wp.currentVideo}
           onPlayItem={wp.actions.playFromQueue}
           onRemoveItem={wp.actions.removeFromQueue}
@@ -254,8 +238,6 @@ export default function App() {
         onClose={() => setParticipantsOpen(false)}
         participants={wp.participants}
         myClientId={wp.myClientId}
-        isHost={wp.isHost}
-        onTransferHost={wp.actions.transferHost}
       />
     </div>
   );

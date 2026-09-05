@@ -1,7 +1,7 @@
-import { Cancel01Icon, CrownIcon } from '@hugeicons/core-free-icons';
+import { Cancel01Icon } from '@hugeicons/core-free-icons';
 import Icon from './Icon';
 
-export default function ParticipantsList({ isOpen, onClose, participants, myClientId, isHost, onTransferHost }) {
+export default function ParticipantsList({ isOpen, onClose, participants, myClientId }) {
   if (!isOpen) return null;
 
   return (
@@ -23,21 +23,8 @@ export default function ParticipantsList({ isOpen, onClose, participants, myClie
                 {p.name}
                 {p.clientId === myClientId && <span className="text-gray-400"> (you)</span>}
               </span>
-              {p.isHost && (
-                <span className="flex items-center gap-0.5 text-[10px] shrink-0 bg-green-500/15 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded font-bold">
-                  <Icon icon={CrownIcon} size={11} />
-                  Host
-                </span>
-              )}
+              {/* No host badge */}
             </div>
-            {isHost && !p.isHost && p.clientId !== myClientId && (
-              <button
-                onClick={() => onTransferHost(p.clientId)}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0 ml-2"
-              >
-                Make host
-              </button>
-            )}
           </div>
         ))}
       </div>

@@ -25,8 +25,6 @@ const STATUS_LABEL = {
   CLOSED: { text: 'Disconnected', color: 'bg-gray-400' },
 };
 
-// Statuses where the room's realtime sync is actually broken, worth
-// interrupting the UI for — not just the normal first-second "connecting".
 const DEGRADED = new Set(['CHANNEL_ERROR', 'TIMED_OUT', 'CLOSED']);
 
 const pill = 'flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors';
@@ -34,7 +32,6 @@ const pillIdle = `${pill} bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:ho
 
 export default function TopBar({
   roomName,
-  isHost,
   connectionStatus,
   participantCount,
   onToggleParticipants,
@@ -52,13 +49,11 @@ export default function TopBar({
   onPlayNow,
   onAddToQueue,
   currentVideo,
-  isViewer,
   onResync,
 }) {
   const nowPlaying = useOEmbed(currentVideo);
   const status = STATUS_LABEL[connectionStatus] || STATUS_LABEL.CLOSED;
 
-  // 'idle' | 'copied' | 'failed' — resets a couple seconds after each attempt.
   const [inviteState, setInviteState] = useState('idle');
   const resetTimer = useRef(null);
 
@@ -81,16 +76,6 @@ export default function TopBar({
 
         <span className="font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-lg text-sm">
           Room: {roomName}
-        </span>
-
-        <span
-          className={`font-bold px-3 py-1.5 rounded-lg text-xs ${
-            isHost
-              ? 'bg-green-500/15 text-green-600 dark:text-green-400'
-              : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-          }`}
-        >
-          {isHost ? 'Host' : 'Viewer'}
         </span>
 
         <button
@@ -129,11 +114,9 @@ export default function TopBar({
           <Icon icon={IdeaIcon} size={14} /> Cam Light
         </button>
 
-        {isViewer && (
-          <button onClick={onResync} className={pillIdle} title="Snap back to the host's current time and state">
-            <Icon icon={RefreshIcon} size={14} /> Resync
-          </button>
-        )}
+        <button onClick={onResync} className={pillIdle} title="Snap back to the current shared playback position">
+          <Icon icon={RefreshIcon} size={14} /> Resync
+        </button>
 
         <div className="flex-1" />
 
@@ -160,24 +143,23 @@ export default function TopBar({
         </div>
       )}
 
-      {isHost && (
-        <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-200 dark:border-gray-800">
-          <input
-            type="text"
-            placeholder="Paste a YouTube, Dailymotion, Vimeo, or Google Drive URL…"
-            className="flex-1 min-w-[220px] p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') onPlayNow(); }}
-          />
-          <button onClick={onPlayNow} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
-            <Icon icon={PlayIcon} size={14} /> Play Now
-          </button>
-          <button onClick={onAddToQueue} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
-            <Icon icon={Add01Icon} size={14} /> Add to Queue
-          </button>
-        </div>
-      )}
+      {/* URL input & controls – now visible to everyone */}
+      <div className="flex flex-wrap gap-2 items-center bg-white dark:bg-gray-900 p-2 rounded-lg border border-gray-200 dark:border-gray-800">
+        <input
+          type="text"
+          placeholder="Paste a YouTube, Dailymotion, Vimeo, or Google Drive URL…"
+          className="flex-1 min-w-[220px] p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white text-sm outline-none focus:ring-2 focus:ring-blue-500"
+          value={urlInput}
+          onChange={(e) => setUrlInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') onPlayNow(); }}
+        />
+        <button onClick={onPlayNow} className="flex items-center gap-1.5 bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
+          <Icon icon={PlayIcon} size={14} /> Play Now
+        </button>
+        <button onClick={onAddToQueue} className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm">
+          <Icon icon={Add01Icon} size={14} /> Add to Queue
+        </button>
+      </div>
 
       {nowPlaying?.title && (
         <div className="px-1 text-xs text-gray-500 dark:text-gray-400 truncate">

@@ -3,9 +3,9 @@ import { supabase } from '../lib/supabaseClient';
 import { parseMediaUrl, getClientId } from '../lib/utils';
 
 const DEFAULT_VIDEO = 'https://www.youtube.com/watch?v=LXb3EKWsInQ';
-const DRIFT_THRESHOLD = 0.5; // seconds – seek only when drift exceeds this
+const DRIFT_THRESHOLD = 0.5;
 
-export function useWatchParty(roomName, displayName, initialIsHost) {
+export function useWatchParty(roomName, displayName) {
   // ----- Collaborative state refs -----
   const clockRef = useRef(0);
   const lastAppliedKeyRef = useRef('');
@@ -30,7 +30,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
   const myClientId = useRef(getClientId());
   const joinedAtRef = useRef(Date.now());
 
-  // Refs for latest state (for callbacks)
   const currentVideoRef = useRef(currentVideo);
   const playlistRef = useRef(playlist);
   const playingRef = useRef(playing);
@@ -43,7 +42,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
   useEffect(() => { isReadyRef.current = isReady; }, [isReady]);
   useEffect(() => { displayNameRef.current = displayName; }, [displayName]);
 
-  // ----- Helper -----
   const getPlayerTime = useCallback(() => {
     const player = playerRef.current;
     if (!player || typeof player.getCurrentTime !== 'function') return 0;
@@ -51,7 +49,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     return Number.isFinite(time) ? time : 0;
   }, []);
 
-  // ----- Generate deterministic ordering key for a command -----
   const getCommandKey = (command) => {
     const clockStr = String(command.clock).padStart(12, '0');
     const sender = command.senderId || 'system';
@@ -59,7 +56,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     return `${clockStr}-${sender}-${cmdId}`;
   };
 
-  // ----- Broadcast a command (any participant) -----
   const broadcastCommand = useCallback((action, payload = {}) => {
     const channel = channelRef.current;
     if (!channel) return;
@@ -83,7 +79,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     });
   }, []);
 
-  // ----- Apply incoming command (with ordering) -----
   const applyCommand = useCallback((command) => {
     const player = playerRef.current;
     if (!command) return;
@@ -239,7 +234,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     }
   }, []);
 
-  // ----- Apply pending state when player becomes ready (for video changes) -----
   useEffect(() => {
     if (!isReady || !pendingStateRef.current) return;
     const { time, playing: shouldPlay } = pendingStateRef.current;
@@ -250,7 +244,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     pendingStateRef.current = null;
   }, [isReady]);
 
-  // ----- Heartbeat (broadcast current position) -----
   const broadcastHeartbeat = useCallback(() => {
     const channel = channelRef.current;
     if (!channel || !isReadyRef.current || !playingRef.current) return;
@@ -268,7 +261,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     });
   }, [getPlayerTime]);
 
-  // ----- Start/stop heartbeat interval -----
   useEffect(() => {
     if (playing && isReady) {
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
@@ -287,7 +279,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     };
   }, [playing, isReady, broadcastHeartbeat]);
 
-  // ----- Request sync (new participant) -----
   const requestSync = useCallback(() => {
     const channel = channelRef.current;
     if (!channel) return;
@@ -298,7 +289,7 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     });
   }, []);
 
-  // ----- Main room effect -----
+  // ---- Main room effect ----
   useEffect(() => {
     if (!roomName) return undefined;
 
@@ -327,32 +318,26 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     });
     channelRef.current = channel;
 
-    // ---- Command listener ----
     channel.on('broadcast', { event: 'player_command' }, ({ payload }) => {
       applyCommand(payload);
     });
 
-    // ---- Heartbeat listener (drift correction) ----
     channel.on('broadcast', { event: 'player_heartbeat' }, ({ payload }) => {
       if (payload.senderId === myClientId.current) return;
       const player = playerRef.current;
       if (!player || !isReadyRef.current) return;
 
-      // Latency compensation
       const networkDelay = payload.sentAt ? Math.max(0, (Date.now() - payload.sentAt) / 1000) : 0;
       const targetTime = payload.time + networkDelay;
       const currentTime = player.getCurrentTime();
       const drift = Math.abs(currentTime - targetTime);
 
       if (drift > DRIFT_THRESHOLD) {
-        // Seek silently – do not broadcast a seek command
         isHeartbeatCorrectionRef.current = true;
         player.seekTo(targetTime, 'seconds');
-        // The seek will trigger onSeek; we'll handle it below.
       }
     });
 
-    // ---- Sync request: respond with current state ----
     channel.on('broadcast', { event: 'sync_request' }, ({ payload }) => {
       const requester = payload?.clientId;
       if (requester === myClientId.current) return;
@@ -377,7 +362,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
       });
     });
 
-    // ---- Full state (receiver) ----
     channel.on('broadcast', { event: 'full_state' }, ({ payload }) => {
       if (payload.targetClientId && payload.targetClientId !== myClientId.current) return;
       if (payload.action !== 'set_state') payload.action = 'set_state';
@@ -388,7 +372,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
       hasReceivedInitialStateRef.current = true;
     });
 
-    // ---- Chat & reactions ----
     channel.on('broadcast', { event: 'chat' }, ({ payload }) => {
       if (payload.clientId === myClientId.current) return;
       setChatMessages((prev) => [...prev, payload]);
@@ -399,7 +382,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
       setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== payload.id)), 2500);
     });
 
-    // ---- Presence ----
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
       const list = Object.entries(state).map(([clientId, metas]) => ({
@@ -410,7 +392,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
       setParticipants(list);
     });
 
-    // ---- Subscribe ----
     channel.subscribe((status) => {
       setConnectionStatus(status);
       if (status === 'SUBSCRIBED') {
@@ -478,7 +459,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     broadcastCommand('move_item', { id, direction });
   }, [broadcastCommand]);
 
-  // ----- Player event callbacks (local) -----
   const handleEnded = useCallback(() => {
     if (remoteCommandIdRef.current) return;
     const queue = playlistRef.current;
@@ -517,7 +497,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
   }, [broadcastCommand, getPlayerTime]);
 
   const handleSeek = useCallback(() => {
-    // If this seek was triggered by a heartbeat correction, do not broadcast.
     if (isHeartbeatCorrectionRef.current) {
       isHeartbeatCorrectionRef.current = false;
       return;
@@ -533,7 +512,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     requestSync();
   }, [requestSync]);
 
-  // ----- Chat & reactions -----
   const sendChatMessage = useCallback((text) => {
     if (!text.trim() || !channelRef.current) return;
     const msg = {
@@ -555,7 +533,6 @@ export function useWatchParty(roomName, displayName, initialIsHost) {
     channelRef.current.send({ type: 'broadcast', event: 'reaction', payload: r });
   }, []);
 
-  // ----- Return -----
   return {
     currentVideo,
     playlist,
